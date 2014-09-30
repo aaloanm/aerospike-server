@@ -887,9 +887,12 @@ struct as_namespace_s {
 	bool		storage_data_in_memory;    // true if the DRAM copy is always kept
 	bool    	storage_signature;
 	bool		storage_disable_odirect;
+	bool		storage_enable_osync;
 	uint32_t	storage_defrag_lwm_pct;
 	uint32_t	storage_defrag_sleep;
 	int			storage_defrag_startup_minimum;
+	uint64_t	storage_flush_max_us;
+	uint64_t	storage_fsync_max_us;
 	uint32_t	storage_min_avail_pct;
 	uint32_t	storage_write_smoothing_period;
 

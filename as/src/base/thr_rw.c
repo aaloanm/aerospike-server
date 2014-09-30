@@ -2801,6 +2801,9 @@ write_local_failed(as_transaction* tr, as_index_ref* r_ref,
 	case AS_PROTO_RESULT_FAIL_KEY_MISMATCH:
 		cf_atomic_int_incr(&g_config.err_write_fail_key_mismatch);
 		break;
+	case AS_PROTO_RESULT_FAIL_BIN_NAME:
+		cf_atomic_int_incr(&g_config.err_write_fail_parameter);
+		break;
 	case AS_PROTO_RESULT_FAIL_UNKNOWN:
 	default:
 		cf_atomic_int_incr(&g_config.err_write_fail_unknown);
@@ -3519,7 +3522,7 @@ write_local(as_transaction *tr, write_local_generation *wlg,
 
 		if (op->name_sz >= AS_ID_BIN_SZ) {
 			cf_warning(AS_RW, "too large bin name %d passed in, parameter error", op->name_sz);
-			write_local_failed(tr, &r_ref, record_created, tree, &rd, AS_PROTO_RESULT_FAIL_PARAMETER);
+			write_local_failed(tr, &r_ref, record_created, tree, &rd, AS_PROTO_RESULT_FAIL_BIN_NAME);
 			return -1;
 		}
 
@@ -3532,7 +3535,7 @@ write_local(as_transaction *tr, write_local_generation *wlg,
 
 		if (! reserved) {
 			cf_warning(AS_RW, "write_local: could not reserve bin name");
-			write_local_failed(tr, &r_ref, record_created, tree, &rd, AS_PROTO_RESULT_FAIL_PARAMETER);
+			write_local_failed(tr, &r_ref, record_created, tree, &rd, AS_PROTO_RESULT_FAIL_BIN_NAME);
 			return -1;
 		}
 
@@ -4062,12 +4065,14 @@ write_local(as_transaction *tr, write_local_generation *wlg,
 	//			 packet.
 
 	uint64_t start_ns = 0;
-	if (g_config.microbenchmarks) {
-		start_ns = cf_getns();
-	}
+	
 	if (has_sindex) {
+	
 		if (oldbin_cnt || newbin_cnt) {
 			tr->flag |= AS_TRANSACTION_FLAG_SINDEX_TOUCHED;
+			if (g_config.microbenchmarks) {
+				start_ns = cf_getns();
+			}
 		}
 		// delete should precede insert
 		GTRACE(CALLER, debug, "Delete bin count = %d, Inserted bin count = %d at %s", oldbin_cnt, newbin_cnt, journal ? "prole" : "master");
@@ -4081,11 +4086,12 @@ write_local(as_transaction *tr, write_local_generation *wlg,
 			sindex_ret = as_sindex_put_by_sbin(ns, set_name, newbin_cnt, newbin, &rd);
 			as_sindex_sbin_freeall(newbin, newbin_cnt);
 		}
+		if (g_config.microbenchmarks && start_ns && (oldbin_cnt || newbin_cnt)) {
+			histogram_insert_data_point(g_config.write_sindex_hist, start_ns);
+		}
 	}
 
-	if (g_config.microbenchmarks && start_ns) {
-		histogram_insert_data_point(g_config.write_sindex_hist, start_ns);
-	}
+	
 
 	if (g_config.microbenchmarks) {
 		start_ns = cf_getns();
